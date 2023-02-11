@@ -1,44 +1,27 @@
-import { InjectRedis } from '@liaoliaots/nestjs-redis';
 import { InjectQueue } from '@nestjs/bull';
 import { Injectable } from '@nestjs/common';
 import { Queue } from 'bull';
 import Redis from 'ioredis';
+import { Queues } from 'src/queues';
 import { queuePool } from 'src/bull-board-queue';
-
-export type ClaimFormGenerationJobPayload = {
-  claimId: string;
-};
-
-export type ClaimsSlackJobPayload = {
-  claimId: string;
-  type: 'PENDING_PARTNER_APPROVAL';
-};
-
-export type ClaimsEmailJobPayload = {
-  claimId: string;
-  type: 'MEMBER_DRAFT_SUBMISSION';
-};
 
 @Injectable()
 export class EventsService {
   constructor(
-    // @ts-expect-error type
     @InjectQueue('claims-form-generation')
     public readonly claimFormGeneration: Queue,
-    // @ts-expect-error type
-    @InjectQueue('claims-slack')
-    public readonly claimsSlack: Queue,
-    // @ts-expect-error type
-    @InjectQueue('claims-email')
-    public readonly claimsEmail: Queue,
+    @InjectQueue('claims-notification')
+    public readonly claimsNotification: Queue,
   ) {
     queuePool.add(claimFormGeneration);
-    queuePool.add(claimsSlack);
-    queuePool.add(claimsEmail);
+    queuePool.add(claimsNotification);
   }
 
-  async generateClaimForm(payload: ClaimFormGenerationJobPayload) {
-    await this.claimFormGeneration.add('generate', payload, {
+  async generateClaimForm({
+    name,
+    data,
+  }: Queues['CLAIMS_FORM_GENERATION']['payload']) {
+    await this.claimFormGeneration.add(name, data, {
       attempts: 5,
       backoff: {
         type: 'exponential',
@@ -48,18 +31,11 @@ export class EventsService {
     });
   }
 
-  async sendSlackNotification(payload: ClaimsSlackJobPayload) {
-    await this.claimsSlack.add('send', payload, {
-      attempts: 10,
-      backoff: {
-        type: 'exponential',
-        delay: 1000,
-      },
-    });
-  }
-
-  async sendEmailNotification(payload: ClaimsEmailJobPayload) {
-    await this.claimsEmail.add('send', payload, {
+  async sendNotification({
+    name,
+    data,
+  }: Queues['CLAIMS_NOTIFICATION']['payload']) {
+    await this.claimsNotification.add(name, data, {
       attempts: 10,
       backoff: {
         type: 'exponential',

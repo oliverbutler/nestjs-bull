@@ -7,6 +7,9 @@ export class AppController {
 
   @Post('claim-form')
   generateClaimForm() {
-    this.eventsService.generateClaimForm({ claimId: '1234' });
+    this.eventsService.generateClaimForm({
+      name: 'generate',
+      data: { claimId: 'my-claim-id' },
+    });
   }
 }
