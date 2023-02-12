@@ -1,9 +1,8 @@
 import { BullModule, Processor, ProcessorOptions } from '@nestjs/bullmq';
 import { WorkerOptions, Job } from 'bullmq';
-import { z } from 'zod';
-import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { z, ZodError } from 'zod';
 import { InjectQueue } from '@nestjs/bullmq';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Queue } from 'bullmq';
 
 /**
@@ -46,6 +45,7 @@ export const QUEUES = {
           claimId: z.string(),
           channel: z.string(),
           type: z.literal('PENDING_PARTNER_APPROVAL'),
+          transformToNumber: z.coerce.number(),
         }),
       }),
       z.object({
@@ -63,17 +63,9 @@ export const QUEUES = {
 export type Queues = {
   [K in keyof typeof QUEUES]: {
     queueName: (typeof QUEUES)[K]['queueName'];
-    payload: z.infer<(typeof QUEUES)[K]['payload']>;
+    payload: z.input<(typeof QUEUES)[K]['payload']>;
   };
 };
-
-/**
- * Helper to let you type a job fully, including the queue name and the job name.
- */
-export type TypedJob<T extends keyof Queues> = Job<
-  Queues[T]['payload']['data']
-> &
-  Queues[T]['payload'];
 
 export type TypedProcessPayload<T extends keyof Queues> = Queues[T]['payload'];
 
@@ -116,6 +108,8 @@ export class QueueService {
     );
   }
 
+  private readonly logger = new Logger(QueueService.name);
+
   constructor(
     @InjectQueue('claims-form-generation')
     private readonly claimsFormGenerationQueue: Queue,
@@ -140,5 +134,40 @@ export class QueueService {
 
   getPool() {
     return this.QUEUE_POOL;
+  }
+
+  parseJobPayload<TName extends keyof Queues>(
+    job: Job,
+    name: TName,
+  ): z.infer<(typeof QUEUES)[TName]['payload']> {
+    const expectedQueueName = QUEUES[name].queueName;
+
+    if (job.queueName !== expectedQueueName) {
+      const message = `Expected job to be in queue ${expectedQueueName}, but it was in ${job.queueName}`;
+      this.logger.error(message);
+      throw new Error(message);
+    }
+
+    const payloadToTest = {
+      name: job.name,
+      data: job.data,
+    };
+
+    try {
+      const payload = QUEUES[name].payload.parse(payloadToTest);
+
+      return payload;
+    } catch (error) {
+      if (error instanceof ZodError) {
+        this.logger.error(
+          `Job ${job.id} in queue ${job.queueName} failed to parse payload: ${error.message}`,
+        );
+      } else {
+        this.logger.error(
+          `Job ${job.id} in queue ${job.queueName} failed for unknown reason`,
+        );
+      }
+      throw error;
+    }
   }
 }

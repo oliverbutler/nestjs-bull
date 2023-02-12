@@ -1,6 +1,7 @@
 import { WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import { QueueService, TypedJob, TypedProcessor } from 'src/queues';
+import { Job } from 'bullmq';
+import { QueueService, TypedProcessor } from 'src/queues';
 
 @TypedProcessor('claimsNotification', {})
 export class ClaimsNotificationProcessor extends WorkerHost {
@@ -10,17 +11,22 @@ export class ClaimsNotificationProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: TypedJob<'claimsNotification'>) {
-    this.logger.debug(
-      `Job ${job.name} started... with data ${JSON.stringify(job.data)}`,
+  async process(job: Job) {
+    const { name, data } = this.queueService.parseJobPayload(
+      job,
+      'claimsNotification',
     );
 
-    if (job.name === 'send-email') {
-      this.logger.debug(`Sending email to ${job.data.email}...`);
-      this.logger.debug(`Success sending email to ${job.data.email}...`);
+    this.logger.debug(
+      `Job ${name} started... with data ${JSON.stringify(data)}`,
+    );
+
+    if (name === 'send-email') {
+      this.logger.debug(`Sending email to ${data.email}...`);
+      this.logger.debug(`Success sending email to ${data.email}...`);
     } else {
-      this.logger.debug(`Sending slack to ${job.data.channel}...`);
-      this.logger.debug(`Success sending slack to ${job.data.channel}...`);
+      this.logger.debug(`Sending slack to ${data.channel}...`);
+      this.logger.debug(`Success sending slack to ${data.channel}...`);
     }
   }
 }
