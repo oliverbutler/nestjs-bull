@@ -67,18 +67,19 @@ export type Queues = {
   };
 };
 
-export type TypedProcessPayload<T extends keyof Queues> = Queues[T]['payload'];
-
-export const TypedProcessor = (
-  queue: keyof Queues,
-  workerOptions: WorkerOptions,
-  options?: Omit<ProcessorOptions, 'name'>,
-) => {
-  return Processor(
-    { name: QUEUES[queue].queueName, ...options },
-    workerOptions,
-  );
-};
+export const QueueProcessor = Object.keys(QUEUES).reduce(
+  (acc, queue) => ({
+    ...acc,
+    [queue]: (workerOptions, options) =>
+      Processor({ name: QUEUES[queue].queueName, ...options }, workerOptions),
+  }),
+  {} as {
+    [key in keyof Queues]: (
+      workerOptions?: WorkerOptions,
+      options?: Omit<ProcessorOptions, 'name'>,
+    ) => ClassDecorator;
+  },
+);
 
 type QueuesWithBullMQ = {
   [key in keyof Queues]: Queue<Queues[key]['payload']['data'], unknown>;
@@ -96,7 +97,6 @@ type RecursiveQueueClient = {
 @Injectable()
 export class QueueService {
   private QUEUE_POOL = {} as QueuesWithBullMQ;
-
   public queue = {} as RecursiveQueueClient;
 
   /**

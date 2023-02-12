@@ -1,9 +1,9 @@
 import { Logger } from '@nestjs/common';
-import { QueueService, TypedProcessor } from 'src/queues';
+import { QueueProcessor, QueueService } from 'src/queues';
 import { WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 
-@TypedProcessor('claimsFormGeneration', { concurrency: 10 })
+@QueueProcessor.claimsFormGeneration({ concurrency: 10 })
 export class ClaimsFormGenerationProcessor extends WorkerHost {
   private readonly logger = new Logger(ClaimsFormGenerationProcessor.name);
 

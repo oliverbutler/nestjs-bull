@@ -1,9 +1,9 @@
 import { WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { QueueService, TypedProcessor } from 'src/queues';
+import { QueueProcessor, QueueService } from 'src/queues';
 
-@TypedProcessor('claimsNotification', {})
+@QueueProcessor.claimsNotification()
 export class ClaimsNotificationProcessor extends WorkerHost {
   private readonly logger = new Logger(ClaimsNotificationProcessor.name);
 
