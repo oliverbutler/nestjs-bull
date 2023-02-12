@@ -23,6 +23,7 @@ export class ClaimsNotificationProcessor extends WorkerHost {
 
     if (name === 'send-email') {
       this.logger.debug(`Sending email to ${data.email}...`);
+
       this.logger.debug(`Success sending email to ${data.email}...`);
     } else {
       this.logger.debug(`Sending slack to ${data.channel}...`);

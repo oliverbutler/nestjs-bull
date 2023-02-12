@@ -1,9 +1,8 @@
 import { BullModule, Processor, ProcessorOptions } from '@nestjs/bullmq';
-import { WorkerOptions, Job } from 'bullmq';
+import { WorkerOptions, Job, Queue, JobsOptions } from 'bullmq';
 import { z, ZodError } from 'zod';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
-import { Queue } from 'bullmq';
 
 /**
  * Fully typed queues, broken down by queue name, then the job name, then the jobs payload.
@@ -90,6 +89,7 @@ type RecursiveQueueClient = {
     add: <TName extends Queues[key]['payload']['name']>(
       name: TName,
       data: (Queues[key]['payload'] & { name: TName })['data'],
+      opts?: JobsOptions,
     ) => Promise<void>;
   };
 };
@@ -124,8 +124,10 @@ export class QueueService {
      */
     this.queue = Object.keys(QUEUES).reduce((acc, key) => {
       acc[key] = {
-        add: async (name: any, data: any) => {
-          await this.QUEUE_POOL[key].add(name, data);
+        add: async (name: string, data: any, opts?: JobsOptions) => {
+          const queue: Queue = this.QUEUE_POOL[key];
+
+          await queue.add(name, data, opts);
         },
       };
       return acc;
