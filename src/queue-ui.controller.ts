@@ -2,11 +2,11 @@ import { createBullBoard } from '@bull-board/api';
 import { BaseAdapter } from '@bull-board/api/dist/src/queueAdapters/base';
 import { ExpressAdapter } from '@bull-board/express';
 import { Request, Response, All, Controller, Next } from '@nestjs/common';
-import { getBullBoardQueues } from './bull-board-queue';
 import express from 'express';
+import { getBullBoardQueues } from './queues';
 
 @Controller('/queues/admin')
-export class BullBoardController {
+export class QueueUiController {
   @All('*')
   admin(
     @Request() req: express.Request,

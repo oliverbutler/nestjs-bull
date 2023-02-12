@@ -1,37 +1,30 @@
 import { Logger } from '@nestjs/common';
-import { EventsService } from './events.service';
-import { TypedJob, TypedProcess, TypedProcessor } from 'src/queues';
+import { queueClient, TypedJob, TypedProcessor } from 'src/queues';
+import { WorkerHost } from '@nestjs/bullmq';
 
-@TypedProcessor('CLAIMS_FORM_GENERATION')
-export class ClaimsFormGenerationProcessor {
+@TypedProcessor('claimsFormGeneration', { concurrency: 10 })
+export class ClaimsFormGenerationProcessor extends WorkerHost {
   private readonly logger = new Logger(ClaimsFormGenerationProcessor.name);
 
-  constructor(private readonly eventsService: EventsService) {}
-
-  @TypedProcess('CLAIMS_FORM_GENERATION', '*', { concurrency: 10 })
-  async handleFormGeneration(job: TypedJob<'CLAIMS_FORM_GENERATION'>) {
+  async process(job: TypedJob<'claimsFormGeneration'>) {
     this.logger.debug(`Generating form for claim ${job.data.claimId}...`);
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     this.logger.debug(
       `Success generating form for claim ${job.data.claimId}...`,
     );
 
-    await this.eventsService.sendNotification({
-      name: 'send-slack',
-      data: {
-        type: 'PENDING_PARTNER_APPROVAL',
-        channel: 'test-channel',
-        claimId: job.data.claimId,
-      },
+    await queueClient.claimsNotification.add('send-slack', {
+      type: 'PENDING_PARTNER_APPROVAL',
+      channel: 'test-channel',
+      claimId: job.data.claimId,
     });
 
-    await this.eventsService.sendNotification({
-      name: 'send-email',
-      data: {
-        type: 'MEMBER_DRAFT_SUBMISSION',
-        email: 'test@gmail.com',
-        claimId: job.data.claimId,
-      },
+    await queueClient.claimsNotification.add('send-email', {
+      type: 'MEMBER_DRAFT_SUBMISSION',
+      email: 'test@gmail.com',
+      claimId: job.data.claimId,
     });
   }
 }

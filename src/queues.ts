@@ -1,12 +1,10 @@
-import {
-  BullModule,
-  Process,
-  ProcessOptions,
-  Processor,
-  ProcessorOptions,
-} from '@nestjs/bull';
+import { Processor, ProcessorOptions } from '@nestjs/bullmq';
+import { WorkerOptions, Job } from 'bullmq';
 import { z } from 'zod';
-import { Job } from 'bull';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Injectable } from '@nestjs/common';
+import { Queue } from 'bullmq';
 
 /**
  * Fully typed queues, broken down by queue name, then the job name, then the jobs payload.
@@ -28,7 +26,7 @@ type QueueShape = Record<
 >;
 
 export const QUEUES = {
-  CLAIMS_FORM_GENERATION: {
+  claimsFormGeneration: {
     queueName: 'claims-form-generation',
     payload: z.discriminatedUnion('name', [
       z.object({
@@ -39,7 +37,7 @@ export const QUEUES = {
       }),
     ]),
   },
-  CLAIMS_NOTIFICATION: {
+  claimsNotification: {
     queueName: 'claims-notification',
     payload: z.discriminatedUnion('name', [
       z.object({
@@ -72,24 +70,72 @@ export type Queues = {
 /**
  * Helper to let you type a job fully, including the queue name and the job name.
  */
-export type TypedJob<
-  T extends keyof Queues,
-  TName extends Queues[T]['payload']['name'] | '*' = '*',
-> = TName extends '*'
-  ? Job<Queues[T]['payload']['data']> & Queues[T]['payload']
-  : Job<Queues[T]['payload']['data']> & Queues[T]['payload'] & { name: TName };
+export type TypedJob<T extends keyof Queues> = Job<
+  Queues[T]['payload']['data']
+> &
+  Queues[T]['payload'];
+
+export type TypedProcessPayload<T extends keyof Queues> = Queues[T]['payload'];
 
 export const TypedProcessor = (
   queue: keyof Queues,
+  workerOptions: WorkerOptions,
   options?: Omit<ProcessorOptions, 'name'>,
 ) => {
-  return Processor({ name: QUEUES[queue].queueName, ...options });
+  return Processor(
+    { name: QUEUES[queue].queueName, ...options },
+    workerOptions,
+  );
 };
 
-export const TypedProcess = <T extends keyof Queues>(
-  queue: T,
-  name: Queues[T]['payload']['name'] | '*',
-  options?: Omit<ProcessOptions, 'name'>,
-) => {
-  return Process({ name, ...options });
+type QueuesWithBullMQ = {
+  [key in keyof Queues]: Queue<Queues[key]['payload']['data'], unknown>;
 };
+
+@Injectable()
+export class QueueService {
+  constructor(
+    @InjectQueue('claims-form-generation')
+    private readonly claimsFormGenerationQueue: Queue,
+    @InjectQueue('claims-notification')
+    private readonly claimsNotificationQueue: Queue,
+  ) {
+    QUEUE_POOL.claimsFormGeneration = this.claimsFormGenerationQueue;
+    QUEUE_POOL.claimsNotification = this.claimsNotificationQueue;
+  }
+}
+
+export const QUEUE_POOL = {} as QueuesWithBullMQ;
+
+export const getBullBoardQueues = (): BullMQAdapter[] => {
+  const bullBoardQueues = Object.values(QUEUE_POOL).reduce(
+    (acc: BullMQAdapter[], val) => {
+      acc.push(new BullMQAdapter(val));
+      return acc;
+    },
+    [] as BullMQAdapter[],
+  );
+
+  return bullBoardQueues;
+};
+
+type RecursiveQueueClient = {
+  [key in keyof Queues]: {
+    add: <TName extends Queues[key]['payload']['name']>(
+      name: TName,
+      data: (Queues[key]['payload'] & { name: TName })['data'],
+    ) => Promise<void>;
+  };
+};
+
+export const queueClient: RecursiveQueueClient = Object.keys(QUEUES).reduce(
+  (acc, key) => {
+    acc[key] = {
+      add: async (name, data) => {
+        await QUEUE_POOL[key].add(name, data);
+      },
+    };
+    return acc;
+  },
+  {} as RecursiveQueueClient,
+);

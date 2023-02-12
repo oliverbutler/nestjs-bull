@@ -1,23 +1,15 @@
-import { BullModule } from '@nestjs/bull';
+import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
-import { BullBoardController } from './bull-board.controller';
-import { EventsService } from './events/events.service';
 import { ClaimsFormGenerationProcessor } from './events/claims-form-generation.processor';
 import { ClaimsNotificationProcessor } from './events/claims-notification.processor';
-import { RedisModule } from '@liaoliaots/nestjs-redis';
-import { QUEUES } from './queues';
+import { QUEUES, QueueService } from './queues';
+import { QueueUiController } from './queue-ui.controller';
 
 @Module({
   imports: [
-    RedisModule.forRoot({
-      config: {
-        host: 'localhost',
-        port: 6379,
-      },
-    }),
     BullModule.forRoot({
-      redis: {
+      connection: {
         host: 'localhost',
         port: 6379,
       },
@@ -26,9 +18,9 @@ import { QUEUES } from './queues';
       BullModule.registerQueue({ name }),
     ),
   ],
-  controllers: [AppController, BullBoardController],
+  controllers: [AppController, QueueUiController],
   providers: [
-    EventsService,
+    QueueService,
     ClaimsFormGenerationProcessor,
     ClaimsNotificationProcessor,
   ],
