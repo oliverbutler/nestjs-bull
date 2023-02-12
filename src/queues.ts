@@ -1,4 +1,4 @@
-import { Processor, ProcessorOptions } from '@nestjs/bullmq';
+import { BullModule, Processor, ProcessorOptions } from '@nestjs/bullmq';
 import { WorkerOptions, Job } from 'bullmq';
 import { z } from 'zod';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
@@ -92,33 +92,6 @@ type QueuesWithBullMQ = {
   [key in keyof Queues]: Queue<Queues[key]['payload']['data'], unknown>;
 };
 
-@Injectable()
-export class QueueService {
-  constructor(
-    @InjectQueue('claims-form-generation')
-    private readonly claimsFormGenerationQueue: Queue,
-    @InjectQueue('claims-notification')
-    private readonly claimsNotificationQueue: Queue,
-  ) {
-    QUEUE_POOL.claimsFormGeneration = this.claimsFormGenerationQueue;
-    QUEUE_POOL.claimsNotification = this.claimsNotificationQueue;
-  }
-}
-
-export const QUEUE_POOL = {} as QueuesWithBullMQ;
-
-export const getBullBoardQueues = (): BullMQAdapter[] => {
-  const bullBoardQueues = Object.values(QUEUE_POOL).reduce(
-    (acc: BullMQAdapter[], val) => {
-      acc.push(new BullMQAdapter(val));
-      return acc;
-    },
-    [] as BullMQAdapter[],
-  );
-
-  return bullBoardQueues;
-};
-
 type RecursiveQueueClient = {
   [key in keyof Queues]: {
     add: <TName extends Queues[key]['payload']['name']>(
@@ -128,14 +101,44 @@ type RecursiveQueueClient = {
   };
 };
 
-export const queueClient: RecursiveQueueClient = Object.keys(QUEUES).reduce(
-  (acc, key) => {
-    acc[key] = {
-      add: async (name, data) => {
-        await QUEUE_POOL[key].add(name, data);
-      },
-    };
-    return acc;
-  },
-  {} as RecursiveQueueClient,
-);
+@Injectable()
+export class QueueService {
+  private QUEUE_POOL = {} as QueuesWithBullMQ;
+
+  public queue = {} as RecursiveQueueClient;
+
+  /**
+   * Spread this into the imports array of the module that will use the queues.
+   */
+  static registerQueues() {
+    return Object.values(QUEUES).map(({ queueName: name }) =>
+      BullModule.registerQueue({ name }),
+    );
+  }
+
+  constructor(
+    @InjectQueue('claims-form-generation')
+    private readonly claimsFormGenerationQueue: Queue,
+    @InjectQueue('claims-notification')
+    private readonly claimsNotificationQueue: Queue,
+  ) {
+    this.QUEUE_POOL.claimsFormGeneration = this.claimsFormGenerationQueue;
+    this.QUEUE_POOL.claimsNotification = this.claimsNotificationQueue;
+
+    /**
+     * Generate the queue client, which is a recursive object that lets you type the queue name and the job name, for better queue DX.
+     */
+    this.queue = Object.keys(QUEUES).reduce((acc, key) => {
+      acc[key] = {
+        add: async (name: any, data: any) => {
+          await this.QUEUE_POOL[key].add(name, data);
+        },
+      };
+      return acc;
+    }, {} as RecursiveQueueClient);
+  }
+
+  getPool() {
+    return this.QUEUE_POOL;
+  }
+}

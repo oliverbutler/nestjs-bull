@@ -14,9 +14,7 @@ import { QueueUiController } from './queue-ui.controller';
         port: 6379,
       },
     }),
-    ...Object.values(QUEUES).map(({ queueName: name }) =>
-      BullModule.registerQueue({ name }),
-    ),
+    ...QueueService.registerQueues(),
   ],
   controllers: [AppController, QueueUiController],
   providers: [

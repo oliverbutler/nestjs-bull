@@ -1,12 +1,26 @@
 import { createBullBoard } from '@bull-board/api';
 import { BaseAdapter } from '@bull-board/api/dist/src/queueAdapters/base';
-import { ExpressAdapter } from '@bull-board/express';
+import { BullMQAdapter, ExpressAdapter } from '@bull-board/express';
 import { Request, Response, All, Controller, Next } from '@nestjs/common';
 import express from 'express';
-import { getBullBoardQueues } from './queues';
+import { QueueService } from './queues';
 
 @Controller('/queues/admin')
 export class QueueUiController {
+  constructor(private readonly queueService: QueueService) {}
+
+  private getBullBoardQueues() {
+    const bullBoardQueues = Object.values(this.queueService.getPool()).reduce(
+      (acc: BullMQAdapter[], val) => {
+        acc.push(new BullMQAdapter(val));
+        return acc;
+      },
+      [] as BullMQAdapter[],
+    );
+
+    return bullBoardQueues;
+  }
+
   @All('*')
   admin(
     @Request() req: express.Request,
@@ -15,7 +29,7 @@ export class QueueUiController {
   ) {
     const serverAdapter = new ExpressAdapter();
     serverAdapter.setBasePath('/queues/admin');
-    const queues = getBullBoardQueues();
+    const queues = this.getBullBoardQueues();
     const router = serverAdapter.getRouter() as express.Express;
     const { addQueue } = createBullBoard({
       queues: [],

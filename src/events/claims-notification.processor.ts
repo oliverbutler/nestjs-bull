@@ -1,10 +1,14 @@
 import { WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import { TypedJob, TypedProcessor } from 'src/queues';
+import { QueueService, TypedJob, TypedProcessor } from 'src/queues';
 
 @TypedProcessor('claimsNotification', {})
 export class ClaimsNotificationProcessor extends WorkerHost {
   private readonly logger = new Logger(ClaimsNotificationProcessor.name);
+
+  constructor(private readonly queueService: QueueService) {
+    super();
+  }
 
   async process(job: TypedJob<'claimsNotification'>) {
     this.logger.debug(
