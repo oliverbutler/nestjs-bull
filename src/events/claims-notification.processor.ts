@@ -1,17 +1,15 @@
-import { WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
-import { QueueProcessor, QueueService } from 'src/queues';
+import { Injectable, Logger } from '@nestjs/common';
+import { SqsMessageHandler } from '@ssut/nestjs-sqs';
+import { QueueService } from 'src/queues';
 
-@QueueProcessor.claimsNotification()
-export class ClaimsNotificationProcessor extends WorkerHost {
+@Injectable()
+export class ClaimsNotificationProcessor {
   private readonly logger = new Logger(ClaimsNotificationProcessor.name);
 
-  constructor(private readonly queueService: QueueService) {
-    super();
-  }
+  constructor(private readonly queueService: QueueService) {}
 
-  async process(job: Job) {
+  @SqsMessageHandler('claims-notification')
+  async process(job: AWS.SQS.Message) {
     const { name, data } = this.queueService.parseJobPayload(
       job,
       'claimsNotification',

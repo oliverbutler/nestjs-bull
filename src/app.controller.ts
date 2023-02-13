@@ -7,18 +7,8 @@ export class AppController {
 
   @Post('/:id/submit')
   async generateClaimForm(@Param('id') id: string) {
-    await this.queueService.queue.claimsFormGeneration.add(
-      'generate',
-      {
-        claimId: id,
-      },
-      {
-        attempts: 2,
-        backoff: {
-          type: 'exponential',
-          delay: 10000,
-        },
-      },
-    );
+    await this.queueService.queue.claimsFormGeneration.add('generate', {
+      claimId: id,
+    });
   }
 }

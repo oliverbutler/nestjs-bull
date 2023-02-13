@@ -1,17 +1,15 @@
-import { Logger } from '@nestjs/common';
-import { QueueProcessor, QueueService } from 'src/queues';
-import { WorkerHost } from '@nestjs/bullmq';
-import { Job } from 'bullmq';
+import { Injectable, Logger } from '@nestjs/common';
+import { QueueService } from 'src/queues';
+import { SqsMessageHandler } from '@ssut/nestjs-sqs';
 
-@QueueProcessor.claimsFormGeneration({ concurrency: 5 })
-export class ClaimsFormGenerationProcessor extends WorkerHost {
+@Injectable()
+export class ClaimsFormGenerationProcessor {
   private readonly logger = new Logger(ClaimsFormGenerationProcessor.name);
 
-  constructor(private readonly queueService: QueueService) {
-    super();
-  }
+  constructor(private readonly queueService: QueueService) {}
 
-  async process(job: Job) {
+  @SqsMessageHandler('claims-form-generation')
+  async process(job: AWS.SQS.Message) {
     const { name, data } = this.queueService.parseJobPayload(
       job,
       'claimsFormGeneration',
@@ -23,37 +21,17 @@ export class ClaimsFormGenerationProcessor extends WorkerHost {
 
     this.logger.debug(`Success generating form for claim ${data.claimId}...`);
 
-    await this.queueService.queue.claimsNotification.add(
-      'send-slack',
-      {
-        type: 'PENDING_PARTNER_APPROVAL',
-        channel: 'test-channel',
-        claimId: data.claimId,
-        transformToNumber: 123,
-      },
-      {
-        attempts: 5,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-      },
-    );
+    await this.queueService.queue.claimsNotification.add('send-slack', {
+      type: 'PENDING_PARTNER_APPROVAL',
+      channel: 'test-channel',
+      claimId: data.claimId,
+      transformToNumber: 123,
+    });
 
-    await this.queueService.queue.claimsNotification.add(
-      'send-email',
-      {
-        type: 'MEMBER_DRAFT_SUBMISSION',
-        email: 'test@gmail.com',
-        claimId: data.claimId,
-      },
-      {
-        attempts: 5,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-      },
-    );
+    await this.queueService.queue.claimsNotification.add('send-email', {
+      type: 'MEMBER_DRAFT_SUBMISSION',
+      email: 'test@gmail.com',
+      claimId: data.claimId,
+    });
   }
 }
